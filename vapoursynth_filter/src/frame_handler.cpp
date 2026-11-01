@@ -69,6 +69,10 @@ auto FrameHandler::AddInputSample(IMediaSample *inputSample) -> HRESULT {
     VSMap *frameProps = AVSF_VPS_API->getFramePropertiesRW(frame);
 
     AVSF_VPS_API->mapSetFloat(frameProps, FRAME_PROP_NAME_ABS_TIME, inputSampleStartTime / static_cast<double>(UNITS), maReplace);
+    const double mediaTime =
+        (_filter.GetSegmentStartTime() + inputSampleStartTime * _filter.GetSegmentRate()) /
+        static_cast<double>(UNITS);
+    AVSF_VPS_API->mapSetFloat(frameProps, FRAME_PROP_NAME_MEDIA_TIME, mediaTime, maReplace);
     AVSF_VPS_API->mapSetInt(frameProps, "_SARNum", _filter._inputVideoFormat.pixelAspectRatioNum, maReplace);
     AVSF_VPS_API->mapSetInt(frameProps, "_SARDen", _filter._inputVideoFormat.pixelAspectRatioDen, maReplace);
     AVSF_VPS_API->mapSetInt(frameProps, FRAME_PROP_NAME_SOURCE_FRAME_NB, _nextSourceFrameNb, maReplace);
@@ -163,7 +167,9 @@ auto FrameHandler::AddInputSample(IMediaSample *inputSample) -> HRESULT {
     if (_nextSourceFrameNb < Environment::GetInstance().GetInitialSrcBuffer()) {
         return S_OK;
     } else if (_nextSourceFrameNb == Environment::GetInstance().GetInitialSrcBuffer()) {
-        MainFrameServer::GetInstance().ReloadScript(_filter.m_pInput->CurrentMediaType(), true);
+        if (MainFrameServer::GetInstance().GetScriptClip() == nullptr) {
+            MainFrameServer::GetInstance().ReloadScript(_filter.m_pInput->CurrentMediaType(), true);
+        }
     }
 
     const int maxRequestOutputFrameNb = static_cast<int>(llMulDiv(processSourceFrameIters[0]->first,

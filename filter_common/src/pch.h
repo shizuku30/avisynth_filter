@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <clocale>
 #include <condition_variable>
@@ -48,6 +49,7 @@
 #ifdef AVSF_AVISYNTH
     #include <avisynth.h>
 #else
+    #define VS_USE_API_41
     #include <VapourSynth4.h>
     #include <VSHelper4.h>
     #include <VSScript4.h>

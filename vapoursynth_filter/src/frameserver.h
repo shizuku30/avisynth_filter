@@ -67,11 +67,13 @@ protected:
 
     auto ReloadScript(const AM_MEDIA_TYPE &mediaType, bool ignoreDisconnect, const CSynthFilter *filter) -> bool;
     auto StopScript() -> void;
+    auto FlushScriptCaches() -> void;
 
     VSScript *_vsScript = nullptr;
     VSCore *_vsCore = nullptr;
     VSNode *_sourceClip = nullptr;
     VSNode *_scriptClip = nullptr;
+    bool _preserveOnFlush = false;
     REFERENCE_TIME _scriptAvgFrameDuration = 0;
     std::string _errorString;
 };
@@ -84,8 +86,10 @@ public:
 
     auto ReloadScript(const AM_MEDIA_TYPE &mediaType, bool ignoreDisconnect) -> bool;
     using FrameServerBase::StopScript;
+    using FrameServerBase::FlushScriptCaches;
     constexpr auto LinkSynthFilter(const CSynthFilter *filter) -> void { _filter = filter; }
     constexpr auto GetScriptClip() const -> VSNode * { return _scriptClip; }
+    constexpr auto ShouldPreserveOnFlush() const -> bool { return _preserveOnFlush; }
     constexpr auto GetSourceAvgFrameDuration() const -> REFERENCE_TIME { return _sourceAvgFrameDuration; }
     constexpr auto GetSourceAvgFrameRate() const -> int { return _sourceAvgFrameRate; }
     constexpr auto GetScriptAvgFrameDuration() const -> REFERENCE_TIME { return _scriptAvgFrameDuration; }

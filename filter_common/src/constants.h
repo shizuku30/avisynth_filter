@@ -70,6 +70,7 @@ constexpr const char *FRAME_PROP_NAME_ABS_TIME                = "_AbsoluteTime";
 constexpr const char *FRAME_PROP_NAME_DURATION_NUM            = "_DurationNum";
 constexpr const char *FRAME_PROP_NAME_DURATION_DEN            = "_DurationDen";
 constexpr const char *FRAME_PROP_NAME_FIELD_BASED             = "_FieldBased";
+constexpr const char *FRAME_PROP_NAME_MEDIA_TIME              = "AVSF_MediaTime";
 constexpr const char *FRAME_PROP_NAME_SOURCE_FRAME_NB         = "AVSF_SourceFrameNb";
 constexpr const char *FRAME_PROP_NAME_TYPE_SPECIFIC_FLAGS     = "AVSF_TypeSpecificFlags";
 

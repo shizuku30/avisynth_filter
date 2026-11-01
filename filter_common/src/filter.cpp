@@ -378,11 +378,31 @@ auto CSynthFilter::BeginFlush() -> HRESULT {
 auto CSynthFilter::EndFlush() -> HRESULT {
     if (IsActive()) {
         frameHandler->WaitForWorkerLatch();
+#ifdef AVSF_VAPOURSYNTH
+        if (MainFrameServer::GetInstance().ShouldPreserveOnFlush()) {
+            MainFrameServer::GetInstance().FlushScriptCaches();
+        } else {
+            MainFrameServer::GetInstance().StopScript();
+        }
+#else
         MainFrameServer::GetInstance().StopScript();
+#endif
         frameHandler->EndFlush();
     }
 
     return __super::EndFlush();
+}
+
+auto CSynthFilter::NewSegment(REFERENCE_TIME tStart, REFERENCE_TIME tStop, double dRate) -> HRESULT {
+    _segmentStartTime.store(tStart, std::memory_order_relaxed);
+    _segmentRate.store(dRate, std::memory_order_relaxed);
+    Environment::GetInstance().Log(
+        L"New segment: start %10lld stop %10lld rate %.6f",
+        tStart,
+        tStop,
+        dRate
+    );
+    return __super::NewSegment(tStart, tStop, dRate);
 }
 
 auto CSynthFilter::StopStreaming() -> HRESULT {

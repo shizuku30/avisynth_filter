@@ -47,6 +47,7 @@ public:
     auto Receive(IMediaSample *pSample) -> HRESULT override;
     auto BeginFlush() -> HRESULT override;
     auto EndFlush() -> HRESULT override;
+    auto NewSegment(REFERENCE_TIME tStart, REFERENCE_TIME tStop, double dRate) -> HRESULT override;
     auto StopStreaming() -> HRESULT override;
 
     // ISpecifyPropertyPages
@@ -58,6 +59,8 @@ public:
     constexpr auto GetVideoSourcePath() const -> const std::filesystem::path & { return _videoSourcePath; }
     constexpr auto GetVideoFilterNames() const -> const std::vector<std::wstring> & { return _videoFilterNames; }
     auto GetFrameServerState() const -> AvsState;
+    auto GetSegmentStartTime() const -> REFERENCE_TIME { return _segmentStartTime.load(std::memory_order_relaxed); }
+    auto GetSegmentRate() const -> double { return _segmentRate.load(std::memory_order_relaxed); }
 
     std::unique_ptr<FrameHandler> frameHandler = std::make_unique<FrameHandler>(*this);
 
@@ -103,6 +106,9 @@ private:
 
     bool _isInputMediaTypeChanged = false;
     bool _needReloadScript = false;
+
+    std::atomic<REFERENCE_TIME> _segmentStartTime = 0;
+    std::atomic<double> _segmentRate = 1.0;
 
     std::filesystem::path _videoSourcePath;
     std::vector<std::wstring> _videoFilterNames;

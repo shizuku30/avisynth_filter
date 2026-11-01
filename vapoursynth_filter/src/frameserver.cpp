@@ -13,6 +13,7 @@ namespace {
 
 constexpr const char *VPS_VAR_NAME_SOURCE_NODE = "VpsFilterSource";
 constexpr const char *VPS_VAR_NAME_DISCONNECT  = "VpsFilterDisconnect";
+constexpr const char *VPS_VAR_NAME_PRESERVE_ON_FLUSH = "VpsFilterPreserveOnFlush";
 constexpr const char *VPS_VAR_NAME_SOURCE_PATH = "VpsFilterSourcePath";
 
 auto VS_CC SourceGetFrame(int n, int activationReason, void *instanceData, void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) -> const VSFrame * {
@@ -127,6 +128,7 @@ FrameServerBase::~FrameServerBase() {
 auto FrameServerBase::ReloadScript(const AM_MEDIA_TYPE &mediaType, bool ignoreDisconnect, const CSynthFilter *filter) -> bool {
     StopScript();
     AVSF_VPS_API->freeNode(_sourceClip);
+    _preserveOnFlush = false;
 
     const VSVideoInfo &sourceVideoInfo = Format::GetVideoFormat(mediaType, this).videoInfo;
     FrameServerCommon::GetInstance()._sourceVideoInfo = sourceVideoInfo;
@@ -161,6 +163,10 @@ auto FrameServerBase::ReloadScript(const AM_MEDIA_TYPE &mediaType, bool ignoreDi
             if (AVSF_VPS_API->mapNumElements(scriptOutputs, VPS_VAR_NAME_DISCONNECT) == 1) {
                 toDisconnect = AVSF_VPS_API->mapGetInt(scriptOutputs, VPS_VAR_NAME_DISCONNECT, 0, nullptr) != 0;
             }
+            AVSF_VPS_SCRIPT_API->getVariable(_vsScript, VPS_VAR_NAME_PRESERVE_ON_FLUSH, scriptOutputs);
+            if (AVSF_VPS_API->mapNumElements(scriptOutputs, VPS_VAR_NAME_PRESERVE_ON_FLUSH) == 1) {
+                _preserveOnFlush = AVSF_VPS_API->mapGetInt(scriptOutputs, VPS_VAR_NAME_PRESERVE_ON_FLUSH, 0, nullptr) != 0;
+            }
             AVSF_VPS_API->freeMap(scriptOutputs);
         } else {
             _errorString = AVSF_VPS_SCRIPT_API->getError(_vsScript);
@@ -194,6 +200,12 @@ core.text.Text({}, r'''{}''').set_output()",
     _scriptAvgFrameDuration = llMulDiv(scriptVideoInfo->fpsDen, UNITS, scriptVideoInfo->fpsNum, 0);
 
     return true;
+}
+
+auto FrameServerBase::FlushScriptCaches() -> void {
+    if (_scriptClip != nullptr) {
+        AVSF_VPS_API->clearCoreCaches(_vsCore);
+    }
 }
 
 auto MainFrameServer::ReloadScript(const AM_MEDIA_TYPE &mediaType, bool ignoreDisconnect) -> bool {
