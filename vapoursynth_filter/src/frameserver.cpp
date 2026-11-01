@@ -1,4 +1,4 @@
-// License: https://github.com/CrendKing/avisynth_filter/blob/master/LICENSE.txt
+﻿// License: https://github.com/CrendKing/avisynth_filter/blob/master/LICENSE.txt
 
 #include "frameserver.h"
 
@@ -9,22 +9,34 @@
 
 namespace SynthFilter {
 
+struct SourceContext {
+    std::shared_mutex mutex;
+    FrameHandler *handler;
+    VSVideoInfo videoInfo;
+};
+
 namespace {
 
 constexpr const char *VPS_VAR_NAME_SOURCE_NODE = "VpsFilterSource";
 constexpr const char *VPS_VAR_NAME_DISCONNECT  = "VpsFilterDisconnect";
 constexpr const char *VPS_VAR_NAME_PRESERVE_ON_FLUSH = "VpsFilterPreserveOnFlush";
 constexpr const char *VPS_VAR_NAME_SOURCE_PATH = "VpsFilterSourcePath";
+constexpr const char *VPS_VAR_NAME_IS_AUXILIARY = "VpsFilterIsAuxiliary";
 
 auto VS_CC SourceGetFrame(int n, int activationReason, void *instanceData, void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) -> const VSFrame * {
-    const CSynthFilter *filter = reinterpret_cast<const CSynthFilter *>(instanceData);
+    const auto context = static_cast<SourceContext *>(instanceData);
+    const std::shared_lock sourceLock(context->mutex);
 
-    if (filter == nullptr) {
-        Environment::GetInstance().Log(L"Source frame %6d is requested without the frame handler being linked", n);
-        return FrameServerCommon::GetInstance().CreateSourceDummyFrame(core);
-    } else {
-        return filter->frameHandler->GetSourceFrame(n);
+    if (context->handler != nullptr) {
+        return context->handler->GetSourceFrame(n);
     }
+
+    // 关闭或重新加载后，旧节点仍可能有预取请求；不要再访问播放器对象。
+    return vsapi->newVideoFrame(&context->videoInfo.format, context->videoInfo.width, context->videoInfo.height, nullptr, core);
+}
+
+auto VS_CC SourceFree(void *instanceData, VSCore *core, const VSAPI *vsapi) -> void {
+    delete static_cast<SourceContext *>(instanceData);
 }
 
 }
@@ -104,10 +116,19 @@ auto FrameServerCommon::CreateSourceDummyFrame(VSCore *core) const -> const VSFr
 }
 
 auto FrameServerBase::StopScript() -> void {
+    DetachSource();
     if (_scriptClip != nullptr) {
         Environment::GetInstance().Log(L"Release script clip: %p", _scriptClip);
         AVSF_VPS_API->freeNode(_scriptClip);
         _scriptClip = nullptr;
+    }
+}
+
+auto FrameServerBase::DetachSource() -> void {
+    if (_sourceContext != nullptr) {
+        // 在 FrameHandler 销毁前等待正在取源帧的回调退出，并阻止新的访问。
+        const std::unique_lock sourceLock(_sourceContext->mutex);
+        _sourceContext->handler = nullptr;
     }
 }
 
@@ -128,15 +149,19 @@ FrameServerBase::~FrameServerBase() {
 auto FrameServerBase::ReloadScript(const AM_MEDIA_TYPE &mediaType, bool ignoreDisconnect, const CSynthFilter *filter) -> bool {
     StopScript();
     AVSF_VPS_API->freeNode(_sourceClip);
+    _sourceClip = nullptr;
+    _sourceContext = nullptr;
     _preserveOnFlush = false;
 
     const VSVideoInfo &sourceVideoInfo = Format::GetVideoFormat(mediaType, this).videoInfo;
     FrameServerCommon::GetInstance()._sourceVideoInfo = sourceVideoInfo;
-    _sourceClip = AVSF_VPS_API->createVideoFilter2("VpsFilter_Source", &sourceVideoInfo, SourceGetFrame, nullptr, fmParallel, nullptr, 0, const_cast<CSynthFilter *>(filter), GetVsCore());
+    _sourceContext = new SourceContext { {}, filter != nullptr ? filter->frameHandler.get() : nullptr, sourceVideoInfo };
+    _sourceClip = AVSF_VPS_API->createVideoFilter2("VpsFilter_Source", &sourceVideoInfo, SourceGetFrame, SourceFree, fmParallel, nullptr, 0, _sourceContext, GetVsCore());
     AVSF_VPS_API->setCacheMode(_sourceClip, cmForceDisable);
 
     VSMap *sourceInputs = AVSF_VPS_API->createMap();
     AVSF_VPS_API->mapSetNode(sourceInputs, VPS_VAR_NAME_SOURCE_NODE, _sourceClip, 0);
+    AVSF_VPS_API->mapSetInt(sourceInputs, VPS_VAR_NAME_IS_AUXILIARY, filter == nullptr, 0);
 
     if (filter == nullptr) {
         AVSF_VPS_API->mapSetData(sourceInputs, VPS_VAR_NAME_SOURCE_PATH, nullptr, 0, dtUtf8, 0);

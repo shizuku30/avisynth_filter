@@ -54,6 +54,7 @@ private:
 #define AVSF_VPS_SCRIPT_API FrameServerCommon::GetInstance().GetVsScriptApi()
 
 class CSynthFilter;
+struct SourceContext;
 
 class FrameServerBase {
 public:
@@ -67,11 +68,13 @@ protected:
 
     auto ReloadScript(const AM_MEDIA_TYPE &mediaType, bool ignoreDisconnect, const CSynthFilter *filter) -> bool;
     auto StopScript() -> void;
+    auto DetachSource() -> void;
     auto FlushScriptCaches() -> void;
 
     VSScript *_vsScript = nullptr;
     VSCore *_vsCore = nullptr;
     VSNode *_sourceClip = nullptr;
+    SourceContext *_sourceContext = nullptr;
     VSNode *_scriptClip = nullptr;
     bool _preserveOnFlush = false;
     REFERENCE_TIME _scriptAvgFrameDuration = 0;
@@ -86,6 +89,7 @@ public:
 
     auto ReloadScript(const AM_MEDIA_TYPE &mediaType, bool ignoreDisconnect) -> bool;
     using FrameServerBase::StopScript;
+    using FrameServerBase::DetachSource;
     using FrameServerBase::FlushScriptCaches;
     constexpr auto LinkSynthFilter(const CSynthFilter *filter) -> void { _filter = filter; }
     constexpr auto GetScriptClip() const -> VSNode * { return _scriptClip; }

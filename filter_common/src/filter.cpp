@@ -31,6 +31,9 @@ CSynthFilter::~CSynthFilter() {
     _numFilterInstances -= 1;
     if (_numFilterInstances == 0) {
         _remoteControl.reset();
+#ifdef AVSF_VAPOURSYNTH
+        MainFrameServer::GetInstance().DetachSource();
+#endif
         frameHandler.reset();
         AuxFrameServer::Destroy();
         MainFrameServer::Destroy();
